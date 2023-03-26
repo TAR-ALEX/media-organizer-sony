@@ -81,11 +81,16 @@ void sortDir(Path from, Path to) {
                 } else {
                     datetime = getTiffCreationTime(itpath);
                 }
-            } catch (...) { datetime = toTimeStrings(getModificationTime(itpath)); }
-            try {
                 std::tie(date, timePlusExt) = dateStringToNames(datetime);
                 timePlusExt += "." + itpath.getLongExtention();
-            } catch (...) { throw runtime_error(from.string() + " could not parse date"); }
+            } catch (...) { 
+                try {
+                    datetime = toTimeStrings(getModificationTime(itpath)); 
+                    std::tie(date, timePlusExt) = dateStringToNames(datetime);
+                    timePlusExt += "." + itpath.getLongExtention();
+                } catch (...) { throw runtime_error(itpath + " could not parse date"); }
+            }
+
         } else if (loExt == "pp3") {
             continue;
         } else {
@@ -93,7 +98,7 @@ void sortDir(Path from, Path to) {
                 auto path = itpath;
                 std::tie(date, timePlusExt) = dateStringToNames(toTimeStrings(getModificationTime(path)));
                 timePlusExt += "." + itpath.getLongExtention();
-            } catch (...) { throw runtime_error(from.string() + " could not parse date"); }
+            } catch (...) { throw runtime_error(itpath + " could not parse date"); }
         }
 
         createDirectories(to / date);
@@ -105,11 +110,11 @@ void sortDir(Path from, Path to) {
             auto splt = newPath.splitSuffix();
             createDirectories(splt.first / "raw");
             newPath = splt.first / "raw" / splt.second;
-        }else if(containsRawSubExt && loExt == "mp4"){
+        } else if (containsRawSubExt && loExt == "mp4") {
             auto splt = newPath.splitSuffix();
             createDirectories(splt.first / "rawvid");
             newPath = splt.first / "rawvid" / splt.second;
-        }else if(containsRawSubExt){
+        } else if (containsRawSubExt) {
             auto splt = newPath.splitSuffix();
             createDirectories(splt.first / "rawjpg");
             newPath = splt.first / "rawjpg" / splt.second;
@@ -193,7 +198,7 @@ void markRaw(Path p) {
         } else {
             renamed = path.splitLongExtention().first + ".raw." + path.splitLongExtention().second;
         }
-        cout << estd::clearSettings << "\nRenaming: " << renamed  << estd::clearSettings << endl;
+        cout << estd::clearSettings << "\nRenaming: " << renamed << estd::clearSettings << endl;
         // std::this_thread::sleep_for(1000ms);
 
         rename(path, renamed);
@@ -229,12 +234,12 @@ void unmarkRaw(Path p) {
 
         if (!estd::string_util::hasPrefix(path.splitLongExtention().second, "raw")) {
             continue;
-        }else{
+        } else {
             auto newext = estd::string_util::replacePrefix(path.getLongExtention(), "raw", "");
-            if(estd::string_util::hasPrefix(newext, ".")) newext.substr(1);
+            if (estd::string_util::hasPrefix(newext, ".")) newext.substr(1);
             renamed = path.splitLongExtention().first + newext;
         }
-        cout << estd::clearSettings << "\nRenaming: " << renamed  << estd::clearSettings << endl;
+        cout << estd::clearSettings << "\nRenaming: " << renamed << estd::clearSettings << endl;
 
         rename(path, renamed);
     }
@@ -267,7 +272,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         markRaw(argv[2]);
-    }else if (estd::string_util::toLower(argv[1]) == "unmarkraw") {
+    } else if (estd::string_util::toLower(argv[1]) == "unmarkraw") {
         if (argc < 3) {
             std::cout << estd::setTextColor(255, 100, 100)
                       << "Wrong number of arguments, expected option `unmarkraw` followed by directory to rename.";

@@ -97,6 +97,8 @@ std::string getTiffCreationTime(istream& data, std::string filename) {
     if (idfs.count(0x132)) {
         dateTime = seekAndRead(data, idfs[0x132].value, idfs[0x132].length);
         while (dateTime.back() == '\0' && dateTime.size() > 0) { dateTime.resize(dateTime.size() - 1); }
+    } else {
+        throw runtime_error(filename + " tiff does not have a datetime.");
     }
     if (idfs.count(0x8769)) {
         // std::cout << "in exif\n";
