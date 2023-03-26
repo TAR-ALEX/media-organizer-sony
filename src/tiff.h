@@ -1,6 +1,7 @@
 #include <estd/filesystem.hpp>
 #include <estd/isubstream.hpp>
 #include <fstream>
+#include <sstream>
 #include <iostream>
 #include <locale>
 #include <map>
@@ -112,7 +113,9 @@ std::string getTiffCreationTime(istream& data, std::string filename) {
             auto maker = parseTiffHeader(data, exif[0x927c].value + extraOffset, byteOrder);
 
             if (maker.count(0xb04a) && maker[0xb04a].dataType == 3 && maker[0xb04a].value != 0) {
-                sequenceNumber = "." + to_string(maker[0xb04a].value);
+                std::stringstream ss;
+                ss << std::setw(3) << std::setfill('0') << maker[0xb04a].value;
+                sequenceNumber = "bur" + ss.str();
             }
         }
     }
