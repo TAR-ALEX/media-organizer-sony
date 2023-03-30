@@ -73,31 +73,32 @@ void sortDir(Path from, Path to) {
         std::string extention = "";
 
         string loExt = toLower(itpath.getExtention());
-        if (loExt == "jpg" || loExt == "jpeg" || loExt == "arw" || loExt == "tiff") {
+        if (loExt == ".jpg" || loExt == ".jpeg" || loExt == ".arw" || loExt == ".tiff") {
             string datetime = "";
             try {
-                if (loExt == "jpg" || loExt == "jpeg") {
+                if (loExt == ".jpg" || loExt == ".jpeg") {
                     datetime = getJpegCreationTime(itpath);
                 } else {
                     datetime = getTiffCreationTime(itpath);
                 }
                 std::tie(date, timePlusExt) = dateStringToNames(datetime);
-                timePlusExt += "." + itpath.getLongExtention();
+                timePlusExt += itpath.getLongExtention();
             } catch (...) { 
                 try {
                     datetime = toTimeStrings(getModificationTime(itpath)); 
                     std::tie(date, timePlusExt) = dateStringToNames(datetime);
-                    timePlusExt += "." + itpath.getLongExtention();
+                    timePlusExt += itpath.getLongExtention();
                 } catch (...) { throw runtime_error(itpath + " could not parse date"); }
             }
 
-        } else if (loExt == "pp3") {
+        } else if (loExt == ".pp3") {
             continue;
         } else {
             try {
                 auto path = itpath;
                 std::tie(date, timePlusExt) = dateStringToNames(toTimeStrings(getModificationTime(path)));
-                timePlusExt += "." + itpath.getLongExtention();
+                if (itpath.hasExtention())
+                    timePlusExt += itpath.getLongExtention();
             } catch (...) { throw runtime_error(itpath + " could not parse date"); }
         }
 
@@ -105,12 +106,12 @@ void sortDir(Path from, Path to) {
         Path newPath = to / date / timePlusExt;
 
         std::string loLongExt = toLower(itpath.getLongExtention());
-        bool containsRawSubExt = estd::string_util::hasPrefix(loLongExt, "raw");
-        if (loExt == "arw" || exists(itpath + ".pp3")) {
+        bool containsRawSubExt = estd::string_util::hasPrefix(loLongExt, ".raw");
+        if (loExt == ".arw" || exists(itpath + ".pp3")) {
             auto splt = newPath.splitSuffix();
             createDirectories(splt.first / "raw");
             newPath = splt.first / "raw" / splt.second;
-        } else if (containsRawSubExt && loExt == "mp4") {
+        } else if (containsRawSubExt && loExt == ".mp4") {
             auto splt = newPath.splitSuffix();
             createDirectories(splt.first / "rawvid");
             newPath = splt.first / "rawvid" / splt.second;
@@ -127,7 +128,7 @@ void sortDir(Path from, Path to) {
                 std::stringstream ss;
                 ss << std::setw(2) << std::setfill('0') << i;
                 Path deDupPath =
-                    newPath.splitLongExtention().first + "dup" + ss.str() + "." + newPath.splitLongExtention().second;
+                    newPath.splitLongExtention().first + "dup" + ss.str() + newPath.splitLongExtention().second;
                 if (!exists(deDupPath)) {
                     newPath = deDupPath;
                     break;
@@ -191,12 +192,10 @@ void markRaw(Path p) {
         cout << estd::moveCursor(0, 2) << estd::clearAfterCursor << estd::moveCursor(0, 2);
         cout << estd::clearSettings << "Progress:   " << estd::setTextColor(0, 255, 0)
              << progress * 100.0 / paths.size() << " %\n";
-        if (path.splitLongExtention().second == "") {
-            renamed = path.splitLongExtention().first + ".raw";
-        } else if (estd::string_util::hasPrefix(path.splitLongExtention().second, "raw")) {
+        if (estd::string_util::hasPrefix(path.splitLongExtention().second, ".raw")) {
             continue;
         } else {
-            renamed = path.splitLongExtention().first + ".raw." + path.splitLongExtention().second;
+            renamed = path.splitLongExtention().first + ".raw" + path.splitLongExtention().second;
         }
         cout << estd::clearSettings << "\nRenaming: " << renamed << estd::clearSettings << endl;
         // std::this_thread::sleep_for(1000ms);
@@ -232,11 +231,10 @@ void unmarkRaw(Path p) {
         cout << estd::clearSettings << "Progress:   " << estd::setTextColor(0, 255, 0)
              << progress * 100.0 / paths.size() << " %\n";
 
-        if (!estd::string_util::hasPrefix(path.splitLongExtention().second, "raw")) {
+        if (!estd::string_util::hasPrefix(path.splitLongExtention().second, ".raw")) {
             continue;
         } else {
-            auto newext = estd::string_util::replacePrefix(path.getLongExtention(), "raw", "");
-            if (estd::string_util::hasPrefix(newext, ".")) newext.substr(1);
+            auto newext = estd::string_util::replacePrefix(path.getLongExtention(), ".raw", "");
             renamed = path.splitLongExtention().first + newext;
         }
         cout << estd::clearSettings << "\nRenaming: " << renamed << estd::clearSettings << endl;
