@@ -1,39 +1,67 @@
 #include "tiff.h"
 #include <estd/AnsiEscape.hpp>
 #include <estd/filesystem.hpp>
+#include <estd/ostream_proxy.hpp>
 #include <fstream>
 #include <iostream>
 #include <locale>
+#include <regex>
 
 using namespace std;
 using namespace estd::files;
 using namespace estd::string_util;
 
-vector<char> readAll(Path p) {
-    std::ifstream file(p, std::ios::binary | std::ios::ate);
-    std::streamsize size = file.tellg();
-    file.seekg(0, std::ios::beg);
+estd::ostream_proxy info{&std::cout};
 
-    std::vector<char> buffer(size);
-    if (!file.read(buffer.data(), size)) { return {}; }
-    return buffer;
+//selects the time in the label if the modification time is less than 2 hours from it
+std::string selectBestTime(std::string label, std::string modification) {
+    auto dateToInt = [](std::string s) {
+        static const regex rex{R"regex(^([\d]{2,})--([\d]{2,})-([\d]{2,})-([\d]{2,}))regex"};
+        smatch m;
+        regex_search(s, m, rex);
+        if (m.size() != 5) return int64_t{-1};
+        else {
+            int64_t result = 0;
+            result += stoi(m[1]);
+            result *= 24;
+            result += stoi(m[2]);
+            result *= 60;
+            result += stoi(m[3]);
+            result *= 60;
+            result += stoi(m[4]);
+            return result;
+        }
+    };
+
+    int64_t l = dateToInt(label);
+    int64_t m = dateToInt(modification);
+    if (l == -1) return modification;
+
+    if (abs(l - m) < 2 * 60 * 60) return label;
+    return modification;
 }
 
-template <typename TP>
-// <date, time>
-std::string toTimeStrings(TP tp) {
-    string date = "";
+std::string getPathTimeString(Path p) {
+    Path suffix = p.getSuffix();
+    string suffixStr = suffix.splitLongExtention().first;
+    static const regex rex{R"regex(^[\d]{2,}--[\d]{2,}-[\d]{2,}-[\d]{2,})regex"};
+    smatch m;
+    regex_search(suffixStr, m, rex);
+    if (m.size() != 1) return "";
+    return m[0];
+}
+
+std::string toTimeStrings(FileTime tp) {
     using namespace std::chrono;
-    auto sctp = time_point_cast<system_clock::duration>(tp - TP::clock::now() + system_clock::now());
+    auto sctp = time_point_cast<system_clock::duration>(tp - FileTime::clock::now() + system_clock::now());
 
     std::time_t tt = system_clock::to_time_t(sctp);
     std::tm* gmt = std::localtime(&tt);
     std::stringstream buffer;
 
     buffer << std::put_time(gmt, "%Y:%m:%d %H:%M:%S");
-    date = buffer.str();
 
-    return date;
+    return buffer.str();
 }
 
 //folder, filename
@@ -83,10 +111,11 @@ void sortDir(Path from, Path to) {
                 }
                 std::tie(date, timePlusExt) = dateStringToNames(datetime);
                 timePlusExt += itpath.getLongExtention();
-            } catch (...) { 
+            } catch (...) {
                 try {
-                    datetime = toTimeStrings(getModificationTime(itpath)); 
-                    std::tie(date, timePlusExt) = dateStringToNames(datetime);
+                    std::tie(date, timePlusExt) = dateStringToNames(toTimeStrings(getModificationTime(itpath)));
+                    std::string oldName = getPathTimeString(itpath);
+                    timePlusExt = selectBestTime(oldName, timePlusExt);
                     timePlusExt += itpath.getLongExtention();
                 } catch (...) { throw runtime_error(itpath + " could not parse date"); }
             }
@@ -95,10 +124,10 @@ void sortDir(Path from, Path to) {
             continue;
         } else {
             try {
-                auto path = itpath;
-                std::tie(date, timePlusExt) = dateStringToNames(toTimeStrings(getModificationTime(path)));
-                if (itpath.hasExtention())
-                    timePlusExt += itpath.getLongExtention();
+                std::tie(date, timePlusExt) = dateStringToNames(toTimeStrings(getModificationTime(itpath)));
+                std::string oldName = getPathTimeString(itpath);
+                timePlusExt = selectBestTime(oldName, timePlusExt);
+                if (itpath.hasExtention()) timePlusExt += itpath.getLongExtention();
             } catch (...) { throw runtime_error(itpath + " could not parse date"); }
         }
 
@@ -106,7 +135,8 @@ void sortDir(Path from, Path to) {
         Path newPath = to / date / timePlusExt;
 
         std::string loLongExt = toLower(itpath.getLongExtention());
-        bool containsRawSubExt = estd::string_util::hasPrefix(loLongExt, ".raw");
+        bool containsRawSubExt = estd::string_util::contains(loLongExt, ".raw");
+        bool containsPrivSubExt = estd::string_util::contains(loLongExt, ".priv");
         if (loExt == ".arw" || exists(itpath + ".pp3")) {
             auto splt = newPath.splitSuffix();
             createDirectories(splt.first / "raw");
@@ -119,6 +149,10 @@ void sortDir(Path from, Path to) {
             auto splt = newPath.splitSuffix();
             createDirectories(splt.first / "rawjpg");
             newPath = splt.first / "rawjpg" / splt.second;
+        } else if (containsPrivSubExt) {
+            auto splt = newPath.splitSuffix();
+            createDirectories(splt.first / "private");
+            newPath = splt.first / "private" / splt.second;
         }
 
         if (exists(newPath)) {
@@ -135,13 +169,13 @@ void sortDir(Path from, Path to) {
                 }
             }
         }
-        cout << estd::moveCursor(0, 2) << estd::clearAfterCursor << estd::moveCursor(0, 2);
-        cout << estd::clearSettings << "Progress:   " << estd::setTextColor(0, 255, 0)
+        info << estd::moveCursor(0, 2) << estd::clearAfterCursor << estd::moveCursor(0, 2);
+        info << estd::clearSettings << "Progress:   " << estd::setTextColor(0, 255, 0)
              << progress * 100.0 / paths.size() << " %\n";
-        cout << estd::clearSettings << "Duplicates: " << estd::setTextColor(255, 100, 100) << dupCount << "\n\n";
-        cout << estd::clearSettings << "Dir:  " << estd::setTextColor(255, 255, 0) << date << "\n";
-        cout << estd::clearSettings << "From: " << estd::setTextColor(255, 255, 0) << itpath << "\n";
-        cout << estd::clearSettings << "To:   " << estd::setTextColor(255, 255, 0) << newPath.normalize() << "\n";
+        info << estd::clearSettings << "Duplicates: " << estd::setTextColor(255, 100, 100) << dupCount << "\n\n";
+        info << estd::clearSettings << "Dir:  " << estd::setTextColor(255, 255, 0) << date << "\n";
+        info << estd::clearSettings << "From: " << estd::setTextColor(255, 255, 0) << itpath << "\n";
+        info << estd::clearSettings << "To:   " << estd::setTextColor(255, 255, 0) << newPath.normalize() << "\n";
 
         copy(itpath, newPath.normalize());
         setModificationTime(newPath.normalize(), getModificationTime(itpath));
@@ -152,12 +186,12 @@ void sortDir(Path from, Path to) {
         }
     }
 
-    cout << estd::moveCursor(0, 2) << estd::clearAfterCursor << estd::moveCursor(0, 2);
-    cout << estd::clearSettings << "Progress:   " << estd::setTextColor(0, 255, 0) << 100 << " %\n";
+    info << estd::moveCursor(0, 2) << estd::clearAfterCursor << estd::moveCursor(0, 2);
+    info << estd::clearSettings << "Progress:   " << estd::setTextColor(0, 255, 0) << 100 << " %\n";
 
     if (dupCount) {
-        cout << estd::setTextColor(255, 100, 100);
-        std::cout << "\n" << dupCount << " potential duplicates\n";
+        info << estd::setTextColor(255, 100, 100);
+        info << "\n" << dupCount << " potential duplicates\n";
     }
 
     for (auto it : RecursiveDirectoryIterator(to)) {
@@ -165,18 +199,19 @@ void sortDir(Path from, Path to) {
         paths.insert(it.path());
         toFileCount++;
     }
-    if (fromFileCount != toFileCount) cout << estd::setTextColor(255, 100, 100);
+    if (fromFileCount != toFileCount) info << estd::setTextColor(255, 100, 100);
     else
-        cout << estd::setTextColor(0, 255, 0);
-    std::cout << "\n" << fromFileCount << "    original media count";
-    std::cout << "\n" << toFileCount << "      copied media count\n";
+        info << estd::setTextColor(0, 255, 0);
+    info << "\n" << fromFileCount << "    original media count";
+    info << "\n" << toFileCount << "      copied media count\n";
 }
 
 // #include <chrono>
 // #include <thread>
 // using namespace std::chrono_literals;
 
-void markRaw(Path p) {
+void markExt(Path p, string cext) {
+    cext = std::string(".") + cext;
     std::set<Path> paths;
     uint64_t fromFileCount = 0;
     uint64_t toFileCount = 0;
@@ -189,15 +224,15 @@ void markRaw(Path p) {
     for (auto path : paths) {
         Path renamed = "";
         progress++;
-        cout << estd::moveCursor(0, 2) << estd::clearAfterCursor << estd::moveCursor(0, 2);
-        cout << estd::clearSettings << "Progress:   " << estd::setTextColor(0, 255, 0)
+        info << estd::moveCursor(0, 2) << estd::clearAfterCursor << estd::moveCursor(0, 2);
+        info << estd::clearSettings << "Progress:   " << estd::setTextColor(0, 255, 0)
              << progress * 100.0 / paths.size() << " %\n";
-        if (estd::string_util::hasPrefix(path.splitLongExtention().second, ".raw")) {
+        if (estd::string_util::hasPrefix(path.splitLongExtention().second, cext)) {
             continue;
         } else {
-            renamed = path.splitLongExtention().first + ".raw" + path.splitLongExtention().second;
+            renamed = path.splitLongExtention().first + cext + path.splitLongExtention().second;
         }
-        cout << estd::clearSettings << "\nRenaming: " << renamed << estd::clearSettings << endl;
+        info << estd::clearSettings << "\nRenaming: " << renamed << estd::clearSettings << endl;
         // std::this_thread::sleep_for(1000ms);
 
         rename(path, renamed);
@@ -207,14 +242,14 @@ void markRaw(Path p) {
         paths.insert(it.path());
         toFileCount++;
     }
-    if (fromFileCount != toFileCount) cout << estd::setTextColor(255, 100, 100);
+    if (fromFileCount != toFileCount) info << estd::setTextColor(255, 100, 100);
     else
-        cout << estd::setTextColor(0, 255, 0);
-    std::cout << "\n" << fromFileCount << "   original media count";
-    std::cout << "\n" << toFileCount << "    renamed media count\n";
+        info << estd::setTextColor(0, 255, 0);
+    info << "\n" << fromFileCount << "   original media count";
+    info << "\n" << toFileCount << "    renamed media count\n";
 }
 
-void unmarkRaw(Path p) {
+void unmarkExt(Path p, string cext) {
     std::set<Path> paths;
     uint64_t fromFileCount = 0;
     uint64_t toFileCount = 0;
@@ -227,17 +262,17 @@ void unmarkRaw(Path p) {
     for (auto path : paths) {
         Path renamed = "";
         progress++;
-        cout << estd::moveCursor(0, 2) << estd::clearAfterCursor << estd::moveCursor(0, 2);
-        cout << estd::clearSettings << "Progress:   " << estd::setTextColor(0, 255, 0)
+        info << estd::moveCursor(0, 2) << estd::clearAfterCursor << estd::moveCursor(0, 2);
+        info << estd::clearSettings << "Progress:   " << estd::setTextColor(0, 255, 0)
              << progress * 100.0 / paths.size() << " %\n";
 
-        if (!estd::string_util::hasPrefix(path.splitLongExtention().second, ".raw")) {
+        if (!estd::string_util::hasPrefix(path.splitLongExtention().second, cext)) {
             continue;
         } else {
-            auto newext = estd::string_util::replacePrefix(path.getLongExtention(), ".raw", "");
+            auto newext = estd::string_util::replacePrefix(path.getLongExtention(), cext, "");
             renamed = path.splitLongExtention().first + newext;
         }
-        cout << estd::clearSettings << "\nRenaming: " << renamed << estd::clearSettings << endl;
+        info << estd::clearSettings << "\nRenaming: " << renamed << estd::clearSettings << endl;
 
         rename(path, renamed);
     }
@@ -246,11 +281,11 @@ void unmarkRaw(Path p) {
         paths.insert(it.path());
         toFileCount++;
     }
-    if (fromFileCount != toFileCount) cout << estd::setTextColor(255, 100, 100);
+    if (fromFileCount != toFileCount) info << estd::setTextColor(255, 100, 100);
     else
-        cout << estd::setTextColor(0, 255, 0);
-    std::cout << "\n" << fromFileCount << "   original media count";
-    std::cout << "\n" << toFileCount << "    renamed media count\n";
+        info << estd::setTextColor(0, 255, 0);
+    info << "\n" << fromFileCount << "   original media count";
+    info << "\n" << toFileCount << "    renamed media count\n";
 }
 
 int main(int argc, char* argv[]) {
@@ -258,37 +293,51 @@ int main(int argc, char* argv[]) {
     // return 0;
 
     if (argc < 2) {
-        std::cout << estd::setTextColor(255, 100, 100)
-                  << "Wrong number of arguments, expected option `markraw` or `unmarkraw` or `organize`\n";
+        info << estd::setTextColor(255, 100, 100)
+             << "Wrong number of arguments, expected option `markraw` or `unmarkraw` or `organize`\n";
         return 1;
     }
 
     if (estd::string_util::toLower(argv[1]) == "markraw") {
         if (argc < 3) {
-            std::cout << estd::setTextColor(255, 100, 100)
-                      << "Wrong number of arguments, expected option `markraw` followed by directory to rename.";
+            info << estd::setTextColor(255, 100, 100)
+                 << "Wrong number of arguments, expected option `markraw` followed by directory to rename.";
             return 1;
         }
-        markRaw(argv[2]);
+        markExt(argv[2], "raw");
     } else if (estd::string_util::toLower(argv[1]) == "unmarkraw") {
         if (argc < 3) {
-            std::cout << estd::setTextColor(255, 100, 100)
-                      << "Wrong number of arguments, expected option `unmarkraw` followed by directory to rename.";
+            info << estd::setTextColor(255, 100, 100)
+                 << "Wrong number of arguments, expected option `unmarkraw` followed by directory to rename.";
             return 1;
         }
-        unmarkRaw(argv[2]);
-    } else if (estd::string_util::toLower(argv[1]) == "organize") {
+        markExt(argv[2], "raw");
+    } else if (estd::string_util::toLower(argv[1]) == "markpriv") {
+        if (argc < 3) {
+            info << estd::setTextColor(255, 100, 100)
+                 << "Wrong number of arguments, expected option `markpriv` followed by directory to rename.";
+            return 1;
+        }
+        markExt(argv[2], "priv");
+    } else if (estd::string_util::toLower(argv[1]) == "unmarkpriv") {
+        if (argc < 3) {
+            info << estd::setTextColor(255, 100, 100)
+                 << "Wrong number of arguments, expected option `markpriv` followed by directory to rename.";
+            return 1;
+        }
+        markExt(argv[2], "priv");
+    } else if (estd::string_util::toLower(argv[1]) == "organize" || estd::string_util::toLower(argv[1]) == "sort") {
         if (argc != 4) {
-            std::cout << estd::setTextColor(255, 100, 100)
-                      << "Wrong number of arguments, expected 3\nexample: media-organizer organize \"From/Dir/\" "
-                         "\"To/Dir/\"\n";
+            info << estd::setTextColor(255, 100, 100)
+                 << "Wrong number of arguments, expected 3\nexample: media-organizer organize \"From/Dir/\" "
+                    "\"To/Dir/\"\n";
             return 1;
         }
 
         sortDir(std::string(argv[2]), std::string(argv[3]));
     } else {
-        std::cout << estd::setTextColor(255, 100, 100) << "Unknown option `" << argv[1]
-                  << "`, expected option `markraw` or `organize`\n";
+        info << estd::setTextColor(255, 100, 100) << "Unknown option `" << argv[1]
+             << "`, expected option `markraw` or `organize`\n";
         return 1;
     }
     return 0;
