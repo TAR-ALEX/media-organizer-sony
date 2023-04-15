@@ -250,6 +250,7 @@ void markExt(Path p, string cext) {
 }
 
 void unmarkExt(Path p, string cext) {
+    cext = std::string(".") + cext;
     std::set<Path> paths;
     uint64_t fromFileCount = 0;
     uint64_t toFileCount = 0;
@@ -311,7 +312,7 @@ int main(int argc, char* argv[]) {
                  << "Wrong number of arguments, expected option `unmarkraw` followed by directory to rename.";
             return 1;
         }
-        markExt(argv[2], "raw");
+        unmarkExt(argv[2], "raw");
     } else if (estd::string_util::toLower(argv[1]) == "markpriv") {
         if (argc < 3) {
             info << estd::setTextColor(255, 100, 100)
@@ -325,7 +326,7 @@ int main(int argc, char* argv[]) {
                  << "Wrong number of arguments, expected option `markpriv` followed by directory to rename.";
             return 1;
         }
-        markExt(argv[2], "priv");
+        unmarkExt(argv[2], "priv");
     } else if (estd::string_util::toLower(argv[1]) == "organize" || estd::string_util::toLower(argv[1]) == "sort") {
         if (argc != 4) {
             info << estd::setTextColor(255, 100, 100)
