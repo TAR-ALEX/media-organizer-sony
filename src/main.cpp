@@ -16,19 +16,23 @@ estd::ostream_proxy info{&std::cout};
 //selects the time in the label if the modification time is less than 2 hours from it
 std::string selectBestTime(std::string label, std::string modification) {
     auto dateToInt = [](std::string s) {
-        static const regex rex{R"regex(^([\d]{2,})--([\d]{2,})-([\d]{2,})-([\d]{2,}))regex"};
+        static const regex rex{R"regex(^([\d]{4,4})-([\d]{2,2})-([\d]{2,2})--([\d]{2,2})-([\d]{2,2})-([\d]{2,2}))regex"};
         smatch m;
         regex_search(s, m, rex);
         if (m.size() != 5) return int64_t{-1};
         else {
             int64_t result = 0;
             result += stoi(m[1]);
-            result *= 24;
+            result *= 12;
             result += stoi(m[2]);
-            result *= 60;
+            result *= 31; // not super accurate but will do
             result += stoi(m[3]);
-            result *= 60;
+            result *= 24;
             result += stoi(m[4]);
+            result *= 60;
+            result += stoi(m[5]);
+            result *= 60;
+            result += stoi(m[6]);
             return result;
         }
     };
@@ -37,14 +41,14 @@ std::string selectBestTime(std::string label, std::string modification) {
     int64_t m = dateToInt(modification);
     if (l == -1) return modification;
 
-    if (abs(l - m) < 2 * 60 * 60) return label;
+    if (abs(l - m) < 10 * 24 * 60 * 60) return label; // if within 10 days, dont change
     return modification;
 }
 
 std::string getPathTimeString(Path p) {
     Path suffix = p.getSuffix();
     string suffixStr = suffix.splitLongExtention().first;
-    static const regex rex{R"regex(^[\d]{2,}--[\d]{2,}-[\d]{2,}-[\d]{2,})regex"};
+    static const regex rex{R"regex(^[\d]{4,4}-[\d]{2,2}-[\d]{2,2}--[\d]{2,2}-[\d]{2,2}-[\d]{2,2})regex"};
     smatch m;
     regex_search(suffixStr, m, rex);
     if (m.size() != 1) return "";
@@ -72,7 +76,7 @@ std::pair<std::string, std::string> dateStringToNames(std::string datetime) {
     auto tokens = splitAll(datetime, ":");
     if (tokens.size() >= 6) {
         date = tokens[0] + "-" + tokens[1];
-        time = tokens[2] + "--" + tokens[3] + "-" + tokens[4] + "-" + tokens[5];
+        time = tokens[0] + "-" + tokens[1] + "-" + tokens[2] + "--" + tokens[3] + "-" + tokens[4] + "-" + tokens[5];
         if (tokens.size() >= 7) time += "bur" + tokens[6];
     } else {
         throw runtime_error("could not parse date");
@@ -86,6 +90,7 @@ void sortDir(Path from, Path to) {
     std::set<Path> paths;
     uint64_t fromFileCount = 0;
     uint64_t toFileCount = 0;
+    uint64_t unchangedFileCount = 0;
     for (auto it : RecursiveDirectoryIterator(from)) {
         if (it.path().isDirectory()) continue;
         paths.insert(it.path());
@@ -115,6 +120,7 @@ void sortDir(Path from, Path to) {
                 try {
                     std::tie(date, timePlusExt) = dateStringToNames(toTimeStrings(getModificationTime(itpath)));
                     std::string oldName = getPathTimeString(itpath);
+                    if(oldName == timePlusExt) unchangedFileCount++;
                     timePlusExt = selectBestTime(oldName, timePlusExt);
                     timePlusExt += itpath.getLongExtention();
                 } catch (...) { throw runtime_error(itpath + " could not parse date"); }
@@ -126,6 +132,7 @@ void sortDir(Path from, Path to) {
             try {
                 std::tie(date, timePlusExt) = dateStringToNames(toTimeStrings(getModificationTime(itpath)));
                 std::string oldName = getPathTimeString(itpath);
+                if(oldName == timePlusExt) unchangedFileCount++;
                 timePlusExt = selectBestTime(oldName, timePlusExt);
                 if (itpath.hasExtention()) timePlusExt += itpath.getLongExtention();
             } catch (...) { throw runtime_error(itpath + " could not parse date"); }
@@ -172,7 +179,8 @@ void sortDir(Path from, Path to) {
         info << estd::moveCursor(0, 2) << estd::clearAfterCursor << estd::moveCursor(0, 2);
         info << estd::clearSettings << "Progress:   " << estd::setTextColor(0, 255, 0)
              << progress * 100.0 / paths.size() << " %\n";
-        info << estd::clearSettings << "Duplicates: " << estd::setTextColor(255, 100, 100) << dupCount << "\n\n";
+        info << estd::clearSettings << "Duplicates: " << estd::setTextColor(255, 100, 100) << dupCount << "\n";
+        info << estd::clearSettings << "KeptName: " << estd::setTextColor(255, 200, 0) << unchangedFileCount << "\n\n";
         info << estd::clearSettings << "Dir:  " << estd::setTextColor(255, 255, 0) << date << "\n";
         info << estd::clearSettings << "From: " << estd::setTextColor(255, 255, 0) << itpath << "\n";
         info << estd::clearSettings << "To:   " << estd::setTextColor(255, 255, 0) << newPath.normalize() << "\n";
@@ -202,8 +210,9 @@ void sortDir(Path from, Path to) {
     if (fromFileCount != toFileCount) info << estd::setTextColor(255, 100, 100);
     else
         info << estd::setTextColor(0, 255, 0);
-    info << "\n" << fromFileCount << "    original media count";
-    info << "\n" << toFileCount << "      copied media count\n";
+    info << "\n" << fromFileCount << "\t\toriginal media count";
+    info << "\n" << toFileCount << "\t\tcopied media count";
+    info << "\n" << unchangedFileCount << "\t\tname unchanged no exif media count\n";
 }
 
 // #include <chrono>
