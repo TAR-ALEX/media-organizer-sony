@@ -16,7 +16,8 @@ estd::ostream_proxy info{&std::cout};
 //selects the time in the label if the modification time is less than 2 hours from it
 std::string selectBestTime(std::string label, std::string modification) {
     auto dateToInt = [](std::string s) {
-        static const regex rex{R"regex(^([\d]{4,4})-([\d]{2,2})-([\d]{2,2})--([\d]{2,2})-([\d]{2,2})-([\d]{2,2}))regex"};
+        static const regex rex{
+            R"regex(^([\d]{4,4})-([\d]{2,2})-([\d]{2,2})--([\d]{2,2})-([\d]{2,2})-([\d]{2,2}))regex"};
         smatch m;
         regex_search(s, m, rex);
         if (m.size() != 5) return int64_t{-1};
@@ -69,13 +70,17 @@ std::string toTimeStrings(FileTime tp) {
 }
 
 //folder, filename
-std::pair<std::string, std::string> dateStringToNames(std::string datetime) {
+std::pair<std::string, std::string> dateStringToNames(std::string datetime, std::string foldStructure = "month") {
     string date = "";
     string time = "";
     datetime = replace_all(datetime, " ", ":");
     auto tokens = splitAll(datetime, ":");
     if (tokens.size() >= 6) {
-        date = tokens[0] + "-" + tokens[1];
+        if (foldStructure == "day") date = tokens[0] + "-" + tokens[1] + "-" + tokens[2];
+        else if (foldStructure == "year")
+            date = tokens[0];
+        else // month
+            date = tokens[0] + "-" + tokens[1];
         time = tokens[0] + "-" + tokens[1] + "-" + tokens[2] + "--" + tokens[3] + "-" + tokens[4] + "-" + tokens[5];
         if (tokens.size() >= 7) time += "bur" + tokens[6];
     } else {
@@ -84,7 +89,7 @@ std::pair<std::string, std::string> dateStringToNames(std::string datetime) {
     return {date, time};
 }
 
-void sortDir(Path from, Path to) {
+void sortDir(Path from, Path to, std::string foldStructure = "month") {
     createDirectories(to);
     uint64_t dupCount = 0;
     std::set<Path> paths;
@@ -114,13 +119,14 @@ void sortDir(Path from, Path to) {
                 } else {
                     datetime = getTiffCreationTime(itpath);
                 }
-                std::tie(date, timePlusExt) = dateStringToNames(datetime);
+                std::tie(date, timePlusExt) = dateStringToNames(datetime, foldStructure);
                 timePlusExt += itpath.getLongExtention();
             } catch (...) {
                 try {
-                    std::tie(date, timePlusExt) = dateStringToNames(toTimeStrings(getModificationTime(itpath)));
+                    std::tie(date, timePlusExt) =
+                        dateStringToNames(toTimeStrings(getModificationTime(itpath)), foldStructure);
                     std::string oldName = getPathTimeString(itpath);
-                    if(oldName == timePlusExt) unchangedFileCount++;
+                    if (oldName == timePlusExt) unchangedFileCount++;
                     timePlusExt = selectBestTime(oldName, timePlusExt);
                     timePlusExt += itpath.getLongExtention();
                 } catch (...) { throw runtime_error(itpath + " could not parse date"); }
@@ -130,9 +136,10 @@ void sortDir(Path from, Path to) {
             continue;
         } else {
             try {
-                std::tie(date, timePlusExt) = dateStringToNames(toTimeStrings(getModificationTime(itpath)));
+                std::tie(date, timePlusExt) =
+                    dateStringToNames(toTimeStrings(getModificationTime(itpath)), foldStructure);
                 std::string oldName = getPathTimeString(itpath);
-                if(oldName == timePlusExt) unchangedFileCount++;
+                if (oldName == timePlusExt) unchangedFileCount++;
                 timePlusExt = selectBestTime(oldName, timePlusExt);
                 if (itpath.hasExtention()) timePlusExt += itpath.getLongExtention();
             } catch (...) { throw runtime_error(itpath + " could not parse date"); }
@@ -336,15 +343,33 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         unmarkExt(argv[2], "priv");
-    } else if (estd::string_util::toLower(argv[1]) == "organize" || estd::string_util::toLower(argv[1]) == "sort") {
+    } else if (estd::string_util::toLower(argv[1]) == "sort" || estd::string_util::toLower(argv[1]) == "sortmonth") {
         if (argc != 4) {
             info << estd::setTextColor(255, 100, 100)
-                 << "Wrong number of arguments, expected 3\nexample: media-organizer organize \"From/Dir/\" "
+                 << "Wrong number of arguments, expected 3\nexample: media-organizer sort \"From/Dir/\" "
                     "\"To/Dir/\"\n";
             return 1;
         }
 
         sortDir(std::string(argv[2]), std::string(argv[3]));
+    } else if (estd::string_util::toLower(argv[1]) == "sortday") {
+        if (argc != 4) {
+            info << estd::setTextColor(255, 100, 100)
+                 << "Wrong number of arguments, expected 3\nexample: media-organizer sort \"From/Dir/\" "
+                    "\"To/Dir/\"\n";
+            return 1;
+        }
+
+        sortDir(std::string(argv[2]), std::string(argv[3]), "day");
+    } else if (estd::string_util::toLower(argv[1]) == "sortyear") {
+        if (argc != 4) {
+            info << estd::setTextColor(255, 100, 100)
+                 << "Wrong number of arguments, expected 3\nexample: media-organizer sort \"From/Dir/\" "
+                    "\"To/Dir/\"\n";
+            return 1;
+        }
+
+        sortDir(std::string(argv[2]), std::string(argv[3]), "year");
     } else {
         info << estd::setTextColor(255, 100, 100) << "Unknown option `" << argv[1]
              << "`, expected option `markraw` or `organize`\n";
