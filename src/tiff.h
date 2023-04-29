@@ -126,14 +126,14 @@ std::string getTiffCreationTime(istream& data, std::string filename) {
 }
 
 std::string getTiffCreationTime(Path p) {
-    ifstream data(p, ios::binary);
+    ifstream data(p.string(), ios::binary);
     return getTiffCreationTime(data, p);
 }
 
 std::string getJpegCreationTime(Path p) {
     std::string dateTime = "";
     std::string sequenceNumber = "";
-    ifstream data(p, ios::binary);
+    ifstream data(p.string(), ios::binary);
 
     if (seekAndRead(data, 0) != 0xff || seekAndRead(data, 1) != 0xd8)
         throw runtime_error(p.string() + " is not a jpeg.");

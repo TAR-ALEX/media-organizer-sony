@@ -18,6 +18,6 @@ file(GLOB_RECURSE APP_SOURCES CONFIGURE_DEPENDS "./src/*.cpp" "./vendor/src/*.cp
 
 add_executable(${PROJECT_NAME} ${APP_SOURCES})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE -lstdc++fs)    
+target_link_libraries(${PROJECT_NAME} PRIVATE)    
 
 
