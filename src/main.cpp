@@ -77,6 +77,8 @@ std::pair<std::string, std::string> dateStringToNames(std::string datetime, std:
     auto tokens = splitAll(datetime, ":");
     if (tokens.size() >= 6) {
         if (foldStructure == "day") date = tokens[0] + "-" + tokens[1] + "-" + tokens[2];
+        else if (foldStructure == "renameonly")
+            date = "";
         else if (foldStructure == "year")
             date = tokens[0];
         else // month
@@ -370,6 +372,15 @@ int main(int argc, char* argv[]) {
         }
 
         sortDir(std::string(argv[2]), std::string(argv[3]), "year");
+    } else if (estd::string_util::toLower(argv[1]) == "renameonly") {
+        if (argc != 4) {
+            info << estd::setTextColor(255, 100, 100)
+                 << "Wrong number of arguments, expected 3\nexample: media-organizer sort \"From/Dir/\" "
+                    "\"To/Dir/\"\n";
+            return 1;
+        }
+
+        sortDir(std::string(argv[2]), std::string(argv[3]), "renameonly");
     } else {
         info << estd::setTextColor(255, 100, 100) << "Unknown option `" << argv[1]
              << "`, expected option `markraw` or `organize`\n";
