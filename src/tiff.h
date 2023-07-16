@@ -1,10 +1,10 @@
 #include <estd/filesystem.hpp>
 #include <estd/isubstream.hpp>
 #include <fstream>
-#include <sstream>
 #include <iostream>
 #include <locale>
 #include <map>
+#include <sstream>
 
 using namespace std;
 using namespace estd::files;
@@ -79,9 +79,11 @@ std::map<uint16_t, TiffIDF> parseTiffHeader(istream& data, size_t tagPtr, bool b
     return result;
 }
 
-std::string getTiffCreationTime(istream& data, std::string filename) {
+std::pair<std::string, std::string> getTiffCreationTimeAndCameraModel(istream& data, std::string filename) {
     std::string dateTime = "";
     std::string sequenceNumber = "";
+    std::string manufacturer = "";
+    std::string model = ""; // Camera model
 
     bool byteOrder = false;
 
@@ -101,14 +103,13 @@ std::string getTiffCreationTime(istream& data, std::string filename) {
         throw runtime_error(filename + " tiff does not have a datetime.");
     }
     if (idfs.count(0x8769)) {
-        // std::cout << "in exif\n";
         auto exif = parseTiffHeader(data, idfs[0x8769].value, byteOrder);
-        std::string manufacturer = "";
         if (idfs.count(0x010f)) manufacturer = seekAndRead(data, idfs[0x010f].value, idfs[0x010f].length);
         manufacturer.resize(4);
+        if (idfs.count(0x0110))
+            model = seekAndRead(data, idfs[0x0110].value, idfs[0x0110].length); // Reading camera model
 
         if (estd::string_util::toUpper(manufacturer) == "SONY" && exif.count(0x927c)) {
-            // std::cout << "in maker\n";
             uint8_t extraOffset = 0;
             if (std::string("SONY DSC", 8) == seekAndRead(data, exif[0x927c].value, 8)) extraOffset = 12;
 
@@ -122,7 +123,16 @@ std::string getTiffCreationTime(istream& data, std::string filename) {
         }
     }
 
-    return dateTime + sequenceNumber;
+    return {dateTime + sequenceNumber, model};
+}
+
+std::string getTiffCreationTime(istream& data, std::string filename) {
+    return getTiffCreationTimeAndCameraModel(data, filename).first;
+}
+
+std::pair<std::string, std::string> getTiffCreationTimeAndCameraModel(Path p) {
+    ifstream data(p.string(), ios::binary);
+    return getTiffCreationTimeAndCameraModel(data, p);
 }
 
 std::string getTiffCreationTime(Path p) {
@@ -130,10 +140,9 @@ std::string getTiffCreationTime(Path p) {
     return getTiffCreationTime(data, p);
 }
 
-std::string getJpegCreationTime(Path p) {
+estd::isubstream jpegToTiff(ifstream& data, Path p) {
     std::string dateTime = "";
     std::string sequenceNumber = "";
-    ifstream data(p.string(), ios::binary);
 
     if (seekAndRead(data, 0) != 0xff || seekAndRead(data, 1) != 0xd8)
         throw runtime_error(p.string() + " is not a jpeg.");
@@ -150,5 +159,17 @@ std::string getJpegCreationTime(Path p) {
     if (seekAndRead(data, headerOffset + 4, 6) != std::string("Exif\0\0", 6))
         throw runtime_error(p.string() + " jpeg has invalid exif.");
     estd::isubstream substr(data.rdbuf(), headerOffset + 10, 100000000); //dataSize
+    return substr;
+}
+
+std::string getJpegCreationTime(Path p) {
+    ifstream data(p.string(), ios::binary);
+    auto substr = jpegToTiff(data, p);
     return getTiffCreationTime(substr, p);
+}
+
+std::pair<std::string, std::string> getJpegCreationAndCameraMode(Path p) {
+    ifstream data(p.string(), ios::binary);
+    auto substr = jpegToTiff(data, p);
+    return getTiffCreationTimeAndCameraModel(substr, p);
 }

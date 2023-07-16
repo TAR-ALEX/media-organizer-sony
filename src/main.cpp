@@ -307,6 +307,43 @@ void unmarkExt(Path p, string cext) {
     info << "\n" << toFileCount << "    renamed media count\n";
 }
 
+void getMostRecentFromEachDevice(Path root){
+    std::set<Path> paths;
+    for (auto it : RecursiveDirectoryIterator(root)) {
+        if (it.path().isDirectory()) continue;
+        paths.insert(it.path());
+    }
+
+    std::map<std::string, std::string> latestImageFromDevice;
+    
+    for(auto pth : paths){
+        try{
+            std::string date = "";
+            std::string deviceName = "";
+            std::string ext = pth.getExtention();
+            if(estd::string_util::containsAny(ext, {".arw"}, true)){
+                std::tie(date, deviceName) = getTiffCreationTimeAndCameraModel(pth);
+            } else if(estd::string_util::containsAny(ext, {".jpg", ".jpeg"}, true)){
+                std::tie(date, deviceName) = getJpegCreationAndCameraMode(pth);
+            }
+            if(latestImageFromDevice.count(deviceName) == 0){
+                latestImageFromDevice[deviceName] = date;
+            } else if(date > latestImageFromDevice[deviceName]){
+                latestImageFromDevice[deviceName] = date;
+            }
+        }catch(std::runtime_error e){
+            // std::cout << e.what() << std::endl;
+        }
+    }
+    
+    for(const auto& pair : latestImageFromDevice) {
+        if (pair.first == "") continue;
+        std::cout << "Device: " << pair.first << ", Date: " << pair.second << std::endl;
+    }
+}
+
+
+
 int main(int argc, char* argv[]) {
     // sortDir(from, to);
     // return 0;
@@ -381,6 +418,13 @@ int main(int argc, char* argv[]) {
         }
 
         sortDir(std::string(argv[2]), std::string(argv[3]), "renameonly");
+    } else if (estd::string_util::toLower(argv[1]) == "findrecent") {
+        if (argc < 3) {
+            info << estd::setTextColor(255, 100, 100)
+                 << "Wrong number of arguments, expected option `markraw` followed by directory to rename.";
+            return 1;
+        }
+        getMostRecentFromEachDevice(argv[2]);
     } else {
         info << estd::setTextColor(255, 100, 100) << "Unknown option `" << argv[1]
              << "`, expected option `markraw` or `organize`\n";
