@@ -1,0 +1,47 @@
+#!/bin/python3
+
+import os
+import shutil
+
+def sort_files_by_extension(source_dir, specified_extensions_folders):
+    """
+    Sorts files in the source directory into folders based on their extensions.
+    Files with specified extensions go to their respective folders.
+    Files with other extensions are sorted into folders named after the extension (without the dot).
+
+    :param source_dir: The directory to sort files from.
+    :param specified_extensions_folders: A dictionary mapping specified file extensions to folder names.
+    """
+    # Go through each file in the source directory
+    for filename in os.listdir(source_dir):
+        file_path = os.path.join(source_dir, filename)
+
+        # Skip if it's not a file
+        if not os.path.isfile(file_path):
+            continue
+
+        # Get the file extension (without the dot)
+        _, ext = os.path.splitext(filename)
+        ext = ext.lower().lstrip('.')
+
+        # Determine the destination folder
+        if f'.{ext}' in specified_extensions_folders:
+            dest_folder = specified_extensions_folders[f'.{ext}']
+        else:
+            # Use the extension as the folder name for unspecified extensions
+            dest_folder = f"{ext}/" if ext else None
+
+        # Create the destination folder if it does not exist and move the file
+        if dest_folder:
+            os.makedirs(dest_folder, exist_ok=True)
+            shutil.move(file_path, os.path.join(dest_folder, filename))
+
+# Mapping of extensions to folder names
+extensions_to_folders = {
+#    '.arw': './raw/',
+    '.jpeg': './jpg/',
+    '.jpg': './jpg/'
+}
+
+# Call the function for the current directory
+sort_files_by_extension('.', extensions_to_folders)

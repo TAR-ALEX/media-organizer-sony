@@ -194,12 +194,21 @@ void sortDir(Path from, Path to, std::string foldStructure = "month") {
         info << estd::clearSettings << "From: " << estd::setTextColor(255, 255, 0) << itpath << "\n";
         info << estd::clearSettings << "To:   " << estd::setTextColor(255, 255, 0) << newPath.normalize() << "\n";
 
-        copy(itpath, newPath.normalize());
-        setModificationTime(newPath.normalize(), getModificationTime(itpath));
+        try{
+            createHardLink(itpath, newPath.normalize());
+        }catch(...){
+            copy(itpath, newPath.normalize());
+            setModificationTime(newPath.normalize(), getModificationTime(itpath));
+        }
+        
 
         if (exists(itpath + ".pp3")) {
-            copy(itpath + ".pp3", newPath.normalize() + ".pp3");
-            setModificationTime(newPath.normalize() + ".pp3", getModificationTime(itpath + ".pp3"));
+            try{
+                createHardLink(itpath + ".pp3", newPath.normalize() + ".pp3");
+            }catch(...){
+                copy(itpath + ".pp3", newPath.normalize() + ".pp3");
+                setModificationTime(newPath.normalize() + ".pp3", getModificationTime(itpath + ".pp3"));
+            }  
         }
     }
 
