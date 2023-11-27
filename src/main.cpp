@@ -83,7 +83,7 @@ std::pair<std::string, std::string> dateStringToNames(std::string datetime, std:
             date = tokens[0];
         else // month
             date = tokens[0] + "-" + tokens[1];
-        time = "[" + tokens[0] + "-" + tokens[1] + "-" + tokens[2] + "] [" + tokens[3] + "-" + tokens[4] + "-" + tokens[5] + "]";
+        time = "[" + tokens[0] + "-" + tokens[1] + "-" + tokens[2] + "][" + tokens[3] + "-" + tokens[4] + "-" + tokens[5] + "]";
         if (tokens.size() >= 7) time += "bur" + tokens[6];
     } else {
         throw runtime_error("could not parse date");
