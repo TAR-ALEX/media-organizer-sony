@@ -17,7 +17,7 @@ estd::ostream_proxy info{&std::cout};
 std::string selectBestTime(std::string label, std::string modification) {
     auto dateToInt = [](std::string s) {
         static const regex rex{
-            R"regex(^([\d]{4,4})-([\d]{2,2})-([\d]{2,2})--([\d]{2,2})-([\d]{2,2})-([\d]{2,2}))regex"};
+            R"regex(^\[?([\d]{4,4})-([\d]{2,2})-([\d]{2,2})(?:--|\]\s*?\[)([\d]{2,2})-([\d]{2,2})-([\d]{2,2})\]?)regex"};
         smatch m;
         regex_search(s, m, rex);
         if (m.size() != 5) return int64_t{-1};
@@ -49,7 +49,7 @@ std::string selectBestTime(std::string label, std::string modification) {
 std::string getPathTimeString(Path p) {
     Path suffix = p.getSuffix();
     string suffixStr = suffix.splitLongExtention().first;
-    static const regex rex{R"regex(^[\d]{4,4}-[\d]{2,2}-[\d]{2,2}--[\d]{2,2}-[\d]{2,2}-[\d]{2,2})regex"};
+    static const regex rex{R"regex(^\[?[\d]{4,4}-[\d]{2,2}-[\d]{2,2}(?:--|\]\s*?\[)[\d]{2,2}-[\d]{2,2}-[\d]{2,2}\]?)regex"};
     smatch m;
     regex_search(suffixStr, m, rex);
     if (m.size() != 1) return "";
@@ -83,7 +83,7 @@ std::pair<std::string, std::string> dateStringToNames(std::string datetime, std:
             date = tokens[0];
         else // month
             date = tokens[0] + "-" + tokens[1];
-        time = tokens[0] + "-" + tokens[1] + "-" + tokens[2] + "--" + tokens[3] + "-" + tokens[4] + "-" + tokens[5];
+        time = "[" + tokens[0] + "-" + tokens[1] + "-" + tokens[2] + "] [" + tokens[3] + "-" + tokens[4] + "-" + tokens[5] + "]";
         if (tokens.size() >= 7) time += "bur" + tokens[6];
     } else {
         throw runtime_error("could not parse date");
@@ -153,11 +153,13 @@ void sortDir(Path from, Path to, std::string foldStructure = "month") {
         std::string loLongExt = toLower(itpath.getLongExtention());
         bool containsRawSubExt = estd::string_util::contains(loLongExt, ".raw");
         bool containsPrivSubExt = estd::string_util::contains(loLongExt, ".priv");
+        bool isVideo = estd::string_util::containsAny(loExt, {".mp4", ".mkv", ".avi"});
+        bool isImage = estd::string_util::containsAny(loExt, {".jpg", ".jpeg", ".png"});
         if (loExt == ".arw" || exists(itpath + ".pp3")) {
             auto splt = newPath.splitSuffix();
             createDirectories(splt.first / "raw");
             newPath = splt.first / "raw" / splt.second;
-        } else if (containsRawSubExt && loExt == ".mp4") {
+        } else if (containsRawSubExt && isVideo) {
             auto splt = newPath.splitSuffix();
             createDirectories(splt.first / "rawvid");
             newPath = splt.first / "rawvid" / splt.second;
@@ -169,6 +171,14 @@ void sortDir(Path from, Path to, std::string foldStructure = "month") {
             auto splt = newPath.splitSuffix();
             createDirectories(splt.first / "private");
             newPath = splt.first / "private" / splt.second;
+        } else if (isVideo) {
+            auto splt = newPath.splitSuffix();
+            createDirectories(splt.first / "vid");
+            newPath = splt.first / "vid" / splt.second;
+        }else if (isImage) {
+            auto splt = newPath.splitSuffix();
+            createDirectories(splt.first / "img");
+            newPath = splt.first / "img" / splt.second;
         }
 
         if (exists(newPath)) {
