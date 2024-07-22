@@ -1,0 +1,57 @@
+#!/bin/python3
+import os
+import json
+import subprocess
+
+def is_video_format(file_name, video_formats):
+    """Check if the file has a video format extension."""
+    for format in video_formats:
+        if file_name.lower().endswith('.' + format):
+            return True
+    return False
+
+def get_video_info(file_path):
+    """Extracts color space, color transfer, matrix coefficients, and color primaries using ffprobe."""
+    try:
+        # Run ffprobe to get file metadata in JSON format
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=color_space,color_transfer,color_primaries,color_range,side_data_list",
+             "-of", "json", file_path],
+            stdout=subprocess.PIPE,
+            universal_newlines=True
+        )
+        info = json.loads(result.stdout)
+
+        # Extract color information
+        color_space = info.get('streams', [{}])[0].get('color_space', 'Unknown')
+        color_transfer = info.get('streams', [{}])[0].get('color_transfer', 'Unknown')
+        color_primaries = info.get('streams', [{}])[0].get('color_primaries', 'Unknown')
+        color_range = info.get('streams', [{}])[0].get('color_range', 'Unknown')
+
+        return color_space, color_transfer, color_primaries, color_range
+    except Exception as e:
+        print(f"Error processing {file_path}: {e}")
+        return 'Unknown', 'Unknown', 'Unknown', 'Unknown'
+
+def create_symlink(src, dest):
+    """Create a symbolic link pointing to src named dest."""
+    try:
+        os.symlink(src, dest)
+    except FileExistsError:
+        pass  # Ignore if the symlink already exists
+
+def main():
+    video_formats = ['mp4', 'avi', 'mov', 'mkv', 'flv']
+    files = [f for f in os.listdir('.') if is_video_format(f, video_formats)]
+
+    for file in files:
+        color_space, color_transfer, color_primaries, color_range = get_video_info(file)
+        dir_name = f"[{color_space}][{color_transfer}][{color_primaries}][{color_range}]"
+        os.makedirs(dir_name, exist_ok=True)
+        symlink_path = os.path.join(dir_name, file)
+        create_symlink(os.path.abspath(file), symlink_path)
+
+if __name__ == "__main__":
+    main()
+
