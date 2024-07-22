@@ -1,0 +1,9 @@
+#!/bin/bash
+
+sort-extension
+cd arw
+rawtherapee-batch . ..
+cd ..
+cd jpg
+media-organizer markraw .
+cd ..

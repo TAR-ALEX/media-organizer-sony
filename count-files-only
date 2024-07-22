@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Check if a directory argument is provided
+if [ -z "$1" ]; then
+    DIR="."
+else
+    DIR="$1"
+fi
+
+# Count the number of regular files (excluding directories and symbolic links)
+FILE_COUNT=$(find "$DIR" -type f ! -lname '*' | wc -l)
+
+# Output the result
+echo "$FILE_COUNT"
+
