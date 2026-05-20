@@ -6,6 +6,7 @@
 #include <iostream>
 #include <locale>
 #include <regex>
+#include "heic.h"
 
 using namespace std;
 using namespace estd::files;
@@ -113,11 +114,13 @@ void sortDir(Path from, Path to, std::string foldStructure = "month") {
         std::string extention = "";
 
         string loExt = toLower(itpath.getExtention());
-        if (loExt == ".jpg" || loExt == ".jpeg" || loExt == ".arw" || loExt == ".tiff") {
+        if (loExt == ".jpg" || loExt == ".jpeg" || loExt == ".heic" || loExt == ".arw" || loExt == ".tiff") {
             string datetime = "";
             try {
                 if (loExt == ".jpg" || loExt == ".jpeg") {
                     datetime = getJpegCreationTime(itpath);
+                } else if(loExt == ".heic"){
+                    datetime = getHeicCreationTime(itpath);
                 } else {
                     datetime = getTiffCreationTime(itpath);
                 }
@@ -153,8 +156,9 @@ void sortDir(Path from, Path to, std::string foldStructure = "month") {
         std::string loLongExt = toLower(itpath.getLongExtention());
         bool containsRawSubExt = estd::string_util::contains(loLongExt, ".raw");
         bool containsPrivSubExt = estd::string_util::contains(loLongExt, ".priv");
-        bool isVideo = estd::string_util::containsAny(loExt, {".mp4", ".mkv", ".avi"});
-        bool isImage = estd::string_util::containsAny(loExt, {".jpg", ".jpeg", ".png"});
+        bool isVideo = estd::string_util::containsAny(loExt, {".mp4", ".mkv", ".avi", ".mov"});
+        bool isImage = estd::string_util::containsAny(loExt, {".jpg", ".jpeg", ".png", ".heic", ".heif"});
+        bool isHeic = estd::string_util::containsAny(loExt, {".heic"});
         if (loExt == ".arw" || exists(itpath + ".pp3")) {
             auto splt = newPath.splitSuffix();
             createDirectories(splt.first / "raw");
@@ -175,6 +179,10 @@ void sortDir(Path from, Path to, std::string foldStructure = "month") {
             auto splt = newPath.splitSuffix();
             createDirectories(splt.first / "vid");
             newPath = splt.first / "vid" / splt.second;
+        } else if (isHeic) {
+            auto splt = newPath.splitSuffix();
+            createDirectories(splt.first / "heic");
+            newPath = splt.first / "heic" / splt.second;
         }else if (isImage) {
             auto splt = newPath.splitSuffix();
             createDirectories(splt.first / "img");
@@ -360,8 +368,6 @@ void getMostRecentFromEachDevice(Path root){
         std::cout << "Device: " << pair.first << ", Date: " << pair.second << std::endl;
     }
 }
-
-
 
 int main(int argc, char* argv[]) {
     // sortDir(from, to);
